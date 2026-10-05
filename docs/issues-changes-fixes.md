@@ -96,5 +96,5 @@ Each table row is one issue. Read the "Learning" column first if you are short o
 - [x] Raise TPM on the `gpt-5.4-mini` deployment (400K TPM; 0 retries).
 - [x] Write `docs/capstone.md` and `lessons/capstone/README.md`; update the root README and `sdk-concepts.md`.
 - [ ] Accepted review limits (lab only): sessions not trimmed, sync DB calls in async code, role passwords set only at first DB start, raw card read on purpose for the redaction demo. Decide if any must be fixed before the push.
-- [ ] Push to `https://github.com/ppenumatsa1/harness-poc.git` (after you confirm; check `.env` is ignored first).
+- [x] Push to `https://github.com/ppenumatsa1/harness-poc.git` (2026-10-04, commit `e5f6112`).
 - [ ] Later: move the agent to Foundry Hosted Agents; revisit the 5 background SDK features and the 1.0.17 upgrade.
