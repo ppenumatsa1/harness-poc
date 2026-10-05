@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Order 1000: who does what?</title>
+<style>
+  :root {
+    --app: #2563eb; --harness: #16a34a; --vm: #64748b; --model: #9333ea;
+    --biz: #ea580c; --sandbox: #dc2626; --human: #0891b2;
+    --bg: #0f172a; --panel: #1e293b; --text: #e2e8f0; --muted: #94a3b8;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 14px/1.4 system-ui, sans-serif; background: var(--bg); color: var(--text); }
+  header { padding: 12px 20px; display: flex; gap: 16px; align-items: center; flex-wrap: wrap; }
+  header h1 { font-size: 18px; margin: 0 12px 0 0; }
+  button, select { background: var(--panel); color: var(--text); border: 1px solid #334155; border-radius: 6px; padding: 6px 12px; cursor: pointer; font: inherit; }
+  button:hover { border-color: var(--muted); }
+  button:disabled { opacity: .4; cursor: default; }
+  body { display: flex; flex-direction: column; min-height: 100vh; font-size: 15px; }
+  .wrap { flex: 1; display: grid; grid-template-columns: minmax(0, 1fr) minmax(340px, 30%); gap: 16px; padding: 0 20px 20px; }
+  #stage { position: relative; min-height: 600px; background: var(--panel); border-radius: 12px; padding: 48px 40px;
+    display: grid; grid-template-columns: 1fr 1.2fr 1.8fr 1.3fr; grid-template-rows: repeat(3, minmax(min-content, 1fr)); gap: 36px 56px; }
+  .box { position: relative; border: 2px solid; border-radius: 12px; padding: 12px 14px; background: #0f172acc; transition: all .3s; opacity: .45; }
+  .box h3 { margin: 0 0 6px; font-size: 18px; }
+  .box small { color: var(--muted); display: block; font-size: 14px; line-height: 1.5; }
+  .box.active { opacity: 1; box-shadow: 0 0 0 4px #ffffff22, 0 0 28px currentColor; transform: scale(1.03); z-index: 1; }
+  .box.dim-vm { opacity: .25; filter: grayscale(1); }
+  #user { grid-column: 1; grid-row: 1; align-self: start; }
+  #approver { grid-column: 1; grid-row: 3; align-self: end; }
+  #app { grid-column: 2; grid-row: 1 / 4; align-self: center; min-height: 55%; }
+  #vm { grid-column: 3; grid-row: 1 / 4; border-style: dashed; background: transparent; opacity: 1;
+    display: flex; flex-direction: column; gap: 44px; padding: 28px 18px 18px; }
+  #harness { flex: 3; }
+  #home { flex: 2; }
+  #model { grid-column: 4; grid-row: 1; align-self: start; }
+  #biz { grid-column: 4; grid-row: 2; align-self: center; }
+  #sandbox { grid-column: 4; grid-row: 3; align-self: end; }
+  .live { margin-top: 12px; padding-top: 10px; border-top: 1px dashed #334155; font: 13px/1.6 ui-monospace, monospace; color: var(--text); }
+  .live .now { color: #facc15; }
+  #vm.idle { border-color: #475569 !important; }
+  #vm .vmtag { position: absolute; top: -12px; left: 14px; background: var(--panel); padding: 0 8px; font-size: 14px; white-space: nowrap; }
+  svg { position: absolute; left: 0; top: 0; width: 100%; height: 100%; pointer-events: none; overflow: visible; }
+  .arrow { stroke-width: 3; fill: none; stroke-dasharray: 8 6; animation: dash 1s linear infinite; }
+  @keyframes dash { to { stroke-dashoffset: -28; } }
+  .label { font-size: 14px; fill: #fff; paint-order: stroke; stroke: #0f172a; stroke-width: 4px; }
+  .side { display: flex; flex-direction: column; gap: 12px; min-height: 0; }
+  .card { background: var(--panel); border-radius: 12px; padding: 14px 16px; }
+  .card.grow { flex: 1; min-height: 120px; display: flex; flex-direction: column; }
+  .card h4 { margin: 0 0 6px; font-size: 13px; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; }
+  #stepTitle { font-size: 20px; font-weight: 600; }
+  .owner { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 13px; margin: 6px 6px 0 0; color: #fff; }
+  .kv { display: flex; justify-content: space-between; border-bottom: 1px solid #334155; padding: 3px 0; }
+  .kv:last-child { border: 0; }
+  .val { font-family: ui-monospace, monospace; }
+  .changed { animation: flash 1s; }
+  @keyframes flash { from { background: #facc1555; } to { background: transparent; } }
+  #files div, #events div { font-family: ui-monospace, monospace; font-size: 13px; line-height: 1.6; }
+  #events { flex: 1; overflow: auto; }
+  @media (max-width: 1600px) { #stage { gap: 28px 32px; padding: 40px 24px; } .box h3 { font-size: 16px; } .box small { font-size: 13px; } .live { font-size: 12px; } }
+  @media (max-width: 1100px) { .wrap { grid-template-columns: 1fr; } #stage { gap: 24px 28px; padding: 40px 20px; } }
+  .legend { display: flex; gap: 10px; flex-wrap: wrap; font-size: 12px; }
+  .legend span::before { content: "■ "; }
+  .progress { height: 4px; background: #334155; border-radius: 2px; margin-top: 8px; }
+  .progress div { height: 100%; background: var(--harness); border-radius: 2px; transition: width .3s; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Order 1000: who does what?</h1>
+  <button id="prev">◀ Back</button>
+  <button id="next">Next ▶</button>
+  <button id="play">▶ Play</button>
+  <button id="reset">↺ Reset</button>
+  <label>Approver decision:
+    <select id="decision"><option value="approve">Approve</option><option value="deny">Deny</option></select>
+  </label>
+  <label>Script runs:
+    <select id="scriptMode"><option value="sandbox">Isolated sandbox (safe)</option><option value="vm">Inside harness VM (risky)</option></select>
+  </label>
+  <div class="legend">
+    <span style="color:var(--app)">App</span><span style="color:var(--harness)">Harness</span>
+    <span style="color:var(--vm)">Runtime infra (VM)</span><span style="color:var(--model)">Model</span>
+    <span style="color:var(--biz)">Business systems</span><span style="color:var(--sandbox)">Sandbox</span>
+    <span style="color:var(--human)">Human</span>
+  </div>
+</header>
+
+<div class="wrap">
+  <div id="stage">
+    <div class="box" id="user" style="color:var(--human);border-color:var(--human)">
+      <h3>👤 Customer</h3><small>Reports the issue</small></div>
+    <div class="box" id="approver" style="color:var(--human);border-color:var(--human)">
+      <h3>🧑‍💼 Approver</h3><small>Business decision</small></div>
+    <div class="box" id="app" style="color:var(--app);border-color:var(--app)">
+      <h3>App</h3><small>Web app + API</small><small>Case DB (business state)</small>
+      <small>Owns: case, approval, fix</small><small style="margin-top:10px">Azure App Service / Container Apps</small><div class="live" id="appLive"></div></div>
+    <div class="box" id="vm" style="color:var(--vm);border-color:var(--vm)">
+      <span class="vmtag" id="vmTag">Hosted Agent VM · case-1000 · not started</span>
+      <div class="box" id="harness" style="color:var(--harness);border-color:var(--harness)">
+        <h3>Harness</h3><small>Your agent code</small><small>Copilot SDK (Python)</small>
+        <small>Copilot runtime: agent loop, context, tools</small><small>Tool permission handler + hooks</small><div class="live" id="harnessLive"></div></div>
+      <div class="box" id="home" style="color:var(--vm);border-color:var(--vm)">
+        <h3>$HOME (kept across idle)</h3><small>Workspace files + Copilot session data</small>
+        <small>Working state only, not business truth</small><div class="live" id="homeLive"></div></div>
+    </div>
+    <div class="box" id="model" style="color:var(--model);border-color:var(--model)">
+      <h3>Foundry model</h3><small>Reasoning only</small><small>No state between calls</small></div>
+    <div class="box" id="biz" style="color:var(--biz);border-color:var(--biz)">
+      <h3>Business systems</h3><small>Order API</small><small>Payment API</small><small>Logs</small></div>
+    <div class="box" id="sandbox" style="color:var(--sandbox);border-color:var(--sandbox)">
+      <h3>Isolated sandbox</h3><small>No network</small><small>No identity</small><small>Runs untrusted code</small></div>
+    <svg id="svg"><defs></defs></svg>
+  </div>
+
+  <div class="side">
+    <div class="card">
+      <div id="stepNum" style="color:var(--muted)">Step 0</div>
+      <div id="stepTitle">Press Next to start</div>
+      <div id="stepText" style="margin-top:6px"></div>
+      <div id="owners"></div>
+      <div class="progress"><div id="bar" style="width:0"></div></div>
+    </div>
+    <div class="card"><h4>App DB (business state)</h4><div id="biztate"></div></div>
+    <div class="card"><h4>VM + $HOME (working state)</h4><div id="vmstate"></div><div id="files"></div></div>
+    <div class="card grow"><h4>SDK wire events</h4><div id="events"></div></div>
+  </div>
+</div>
+
+<script>
+const COLORS = { app:'#2563eb', harness:'#16a34a', vm:'#64748b', model:'#9333ea', biz:'#ea580c', sandbox:'#dc2626', human:'#0891b2' };
+const OWNER_NAMES = { app:'App', harness:'Harness', vm:'Runtime infra', model:'Model', biz:'Business systems', sandbox:'Sandbox', human:'Human' };
+
+function buildSteps(decision, scriptMode) {
+  const s = [
+    { from:'user', to:'app', label:'Checkout failed, Order 1000', owners:['human','app'],
+      title:'Customer reports the issue', text:'The app opens a case. Business state lives in the app DB.',
+      state:{ case:'INVESTIGATING' } },
+    { from:'app', to:'harness', label:'invoke agent (session case-1000)', owners:['app','vm'],
+      title:'App invokes the hosted agent', text:'Foundry starts a VM for this session. The harness starts inside it: your code creates CopilotClient and a session.',
+      vm:'running', events:['client.start','session.create (case-1000)','session.send'] },
+    { from:'harness', to:'model', label:'reason: make a plan', owners:['harness','model'],
+      title:'Agent loop: plan', text:'The runtime sends context to the model. The model plans. The runtime writes plan.md in $HOME.',
+      files:['plan.md'], events:['assistant.turn_start'] },
+    { from:'harness', to:'biz', label:'get_order(1000)', owners:['harness','biz'],
+      title:'Tool: read the order', text:'Read-only tool. Result: order NOT_CONFIRMED.',
+      events:['external_tool.requested get_order'], evidence:{ order:'NOT_CONFIRMED' } },
+    { from:'harness', to:'biz', label:'get_payment(1000)', owners:['harness','biz'],
+      title:'Tool: read the payment', text:'Read-only tool. Result: payment AUTHORIZED (money held, not captured).',
+      events:['external_tool.requested get_payment'], evidence:{ payment:'AUTHORIZED' } },
+    { from:'harness', to:'biz', label:'get_logs(1000)', owners:['harness','biz'],
+      title:'Tool: fetch logs', text:'Logs are copied into $HOME for analysis.',
+      files:['evidence/logs-1000.json'], events:['external_tool.requested get_logs'] },
+    { from:'harness', to:'model', label:'write a log-analysis script', owners:['harness','model'],
+      title:'Model writes a script', text:'The model writes analyze_logs.py. Model-written code is untrusted.',
+      files:['scripts/analyze_logs.py'] },
+    { from:'harness', to:'harness', label:'permission check', owners:['harness'],
+      title:'Tool permission (harness decides)', text:'The runtime raises permission.requested. Your handler in the harness checks policy: allow run_script, deny shell.',
+      events:['permission.requested run_script','→ approved by handler'] },
+  ];
+  if (scriptMode === 'sandbox') {
+    s.push({ from:'harness', to:'sandbox', label:'run_script(code + log copy)', owners:['harness','sandbox'],
+      title:'Script runs in an isolated sandbox', text:'No network, no identity. Only the output comes back: inventory reservation expired at 10:02.',
+      evidence:{ inventory:'RESERVATION_EXPIRED' }, events:['tool result: stdout'] });
+  } else {
+    s.push({ from:'harness', to:'home', label:'run script in VM shell', owners:['harness','vm'],
+      title:'⚠️ Script runs inside the harness VM', text:'Risky: the script runs next to the agent identity, which can call business APIs. Prefer the isolated sandbox.',
+      evidence:{ inventory:'RESERVATION_EXPIRED' }, events:['tool.execution_start shell','tool.execution_complete'], risky:true });
+  }
+  s.push(
+    { from:'harness', to:'model', label:'conclude', owners:['harness','model'],
+      title:'Model concludes', text:'Root cause: reservation expired before the order was confirmed. Proposed fix: re-reserve stock and confirm the order.',
+      files:['findings.md'], events:['assistant.message'] },
+    { from:'harness', to:'app', label:'findings + proposed fix', owners:['harness','app'],
+      title:'Agent returns a proposal', text:'The proposal is NOT authority. The app stores it and waits for a human.',
+      state:{ case:'WAITING_APPROVAL', proposal:'re-reserve + confirm' }, events:['session.idle'] },
+    { from:null, to:null, owners:['vm'],
+      title:'VM goes idle', text:'No work: the VM stops (scale to zero). $HOME is kept. Hours may pass.',
+      vm:'idle', events:['session.disconnect'] },
+  );
+  if (decision === 'approve') {
+    s.push(
+      { from:'approver', to:'app', label:'Approve', owners:['human','app'],
+        title:'Business approval (app decides)', text:'A human approves in the app. The decision is saved in the app DB, not in chat or plan.md.',
+        state:{ case:'APPROVED', approval:'approved by J. Doe' } },
+      { from:'app', to:'biz', label:'apply fix + verify', owners:['app','biz'],
+        title:'App applies the fix', text:'The app (not the agent) calls the business API, then checks the records.',
+        state:{ case:'FIX_VERIFIED' }, evidence:{ order:'CONFIRMED' } },
+    );
+  } else {
+    s.push(
+      { from:'approver', to:'app', label:'Deny', owners:['human','app'],
+        title:'Business approval: denied', text:'The app records the denial. No fix runs. The case does not claim success.',
+        state:{ case:'CLOSED_NO_ACTION', approval:'denied by J. Doe' } },
+    );
+  }
+  s.push(
+    { from:'app', to:'harness', label:'invoke again (same session)', owners:['app','vm'],
+      title:'Resume the agent', text:'Foundry resumes the VM and restores $HOME. The harness calls resume_session("case-1000"), so history and files are back.',
+      vm:'running', events:['session.resume (case-1000)','session.send'] },
+    { from:'harness', to:'model', label:'write report + learnings', owners:['harness','model'],
+      title:'Agent writes the report', text:'The model summarizes evidence, decision, and learnings.',
+      files:['summary.md'], events:['assistant.message'] },
+    { from:'harness', to:'app', label:'summary', owners:['harness','app'],
+      title:'App closes the case', text:'The app stores the report. Repeat learnings can become a skill for next time.',
+      state:{ case: decision === 'approve' ? 'RESOLVED' : 'CLOSED_NO_ACTION', report:'stored' }, events:['session.idle'] },
+  );
+  return s;
+}
+
+let steps = [], i = -1, timer = null;
+const $ = id => document.getElementById(id);
+
+function computeState(upTo) {
+  const st = { biz:{ case:'—' }, evidence:{}, vm:'not started', files:[], events:[] };
+  for (let k = 0; k <= upTo; k++) {
+    const s = steps[k];
+    if (s.state) Object.assign(st.biz, s.state);
+    if (s.evidence) Object.assign(st.evidence, s.evidence);
+    if (s.vm) st.vm = s.vm;
+    if (s.files) st.files.push(...s.files);
+    if (s.events) st.events.push(...s.events);
+  }
+  return st;
+}
+
+function center(el) {
+  const r = el.getBoundingClientRect(), p = $('stage').getBoundingClientRect();
+  return { x: r.left - p.left + r.width / 2, y: r.top - p.top + r.height / 2, w: r.width, h: r.height };
+}
+function edge(a, b) {
+  const dx = b.x - a.x, dy = b.y - a.y;
+  const sx = Math.abs(dx) > 0 ? (a.w / 2) / Math.abs(dx) : Infinity;
+  const sy = Math.abs(dy) > 0 ? (a.h / 2) / Math.abs(dy) : Infinity;
+  const s = Math.min(sx, sy);
+  return { x: a.x + dx * s, y: a.y + dy * s };
+}
+
+function drawArrow(s) {
+  const svg = $('svg');
+  svg.innerHTML = '';
+  if (!s.from) return;
+  const color = s.risky ? COLORS.sandbox : COLORS[s.owners[0]] || '#fff';
+  svg.innerHTML = `<defs><marker id="m" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0L10,5L0,10z" fill="${color}"/></marker></defs>`;
+  const A = center($(s.from)), B = center($(s.to));
+  let path, lx, ly;
+  if (s.from === s.to) {
+    const x = A.x + A.w / 2, y = A.y;
+    path = `M${x},${y - 30} C${x + 70},${y - 60} ${x + 70},${y + 60} ${x},${y + 30}`;
+    lx = x + 10; ly = y - 50;
+  } else {
+    const p1 = edge(A, B), p2 = edge(B, A);
+    path = `M${p1.x},${p1.y} L${p2.x},${p2.y}`;
+    lx = (p1.x + p2.x) / 2; ly = (p1.y + p2.y) / 2 - 8;
+  }
+  svg.innerHTML += `<path class="arrow" d="${path}" stroke="${color}" marker-end="url(#m)"/>
+    <text class="label" x="${lx}" y="${ly}" text-anchor="middle">${s.label}</text>`;
+}
+
+function render() {
+  const s = steps[i];
+  const ids = ['user','approver','app','harness','home','model','biz','sandbox'];
+  ids.forEach(id => $(id).classList.remove('active','dim-vm'));
+  $('prev').disabled = i <= 0;
+  $('next').disabled = i >= steps.length - 1;
+  $('bar').style.width = `${((i + 1) / steps.length) * 100}%`;
+  if (!s) {
+    $('stepNum').textContent = 'Step 0';
+    $('stepTitle').textContent = 'Press Next to start';
+    $('stepText').textContent = 'Watch which box lights up at each step.';
+    $('owners').innerHTML = ''; $('svg').innerHTML = '';
+    $('biztate').innerHTML = kv('case', '—'); $('vmstate').innerHTML = kv('VM', 'not started');
+    $('files').innerHTML = ''; $('events').innerHTML = '';
+    ['appLive','harnessLive','homeLive'].forEach(x => $(x).innerHTML = '');
+    $('vmTag').textContent = 'Hosted Agent VM · case-1000 · not started';
+    return;
+  }
+  [s.from, s.to].filter(Boolean).forEach(id => $(id).classList.add('active'));
+  if (!s.from && s.owners.includes('vm')) $('home').classList.add('active');
+  const st = computeState(i);
+  if (st.vm === 'idle') { $('harness').classList.add('dim-vm'); $('vm').classList.add('idle'); } else $('vm').classList.remove('idle');
+  $('vmTag').textContent = `Hosted Agent VM · case-1000 · ${st.vm === "idle" ? "idle · $HOME kept" : st.vm}`;
+  $('stepNum').textContent = `Step ${i + 1} of ${steps.length}`;
+  $('stepTitle').textContent = s.title;
+  $('stepText').textContent = s.text;
+  $('owners').innerHTML = s.owners.map(o => `<span class="owner" style="background:${COLORS[o]}">${OWNER_NAMES[o]}</span>`).join('');
+  const prev = i > 0 ? computeState(i - 1) : { biz:{}, evidence:{}, vm:'', files:[] };
+  $('biztate').innerHTML = Object.entries(st.biz).map(([k, v]) => kv(k, v, prev.biz[k] !== v)).join('');
+  $('vmstate').innerHTML = kv('VM', st.vm, prev.vm !== st.vm) +
+    Object.entries(st.evidence).map(([k, v]) => kv('evidence.' + k, v, prev.evidence[k] !== v)).join('');
+  $('files').innerHTML = st.files.map(f => `<div class="${prev.files.includes(f) ? '' : 'changed'}">📄 $HOME/${f}</div>`).join('');
+  $('events').innerHTML = st.events.map(e => `<div>${e}</div>`).join('');
+  $('events').scrollTop = 1e6;
+  $('appLive').innerHTML = Object.entries(st.biz).map(([k, v]) => `${k}: <b>${v}</b>`).join('<br>');
+  const loop = steps.slice(0, i + 1).filter(x => x.owners.includes('harness'));
+  $('harnessLive').innerHTML = st.vm === 'idle' ? 'stopped (no process running)' :
+    loop.slice(-4).map((x, k, a) => `<div class="${k === a.length - 1 && s.owners.includes('harness') ? 'now' : ''}">${k === a.length - 1 && s.owners.includes('harness') ? '▶' : '✓'} ${x.label}</div>`).join('');
+  $('homeLive').innerHTML = st.files.map(f => `📄 ${f}`).join('<br>') || '(empty)';
+  drawArrow(s);
+}
+const kv = (k, v, ch) => `<div class="kv ${ch ? 'changed' : ''}"><span>${k}</span><span class="val">${v}</span></div>`;
+
+function reset() {
+  stop(); steps = buildSteps($('decision').value, $('scriptMode').value); i = -1; render();
+}
+function stop() { clearInterval(timer); timer = null; $('play').textContent = '▶ Play'; }
+$('next').onclick = () => { if (i < steps.length - 1) { i++; render(); } };
+$('prev').onclick = () => { if (i > 0) { i--; render(); } };
+$('reset').onclick = reset;
+$('decision').onchange = reset;
+$('scriptMode').onchange = reset;
+$('play').onclick = () => {
+  if (timer) return stop();
+  if (i >= steps.length - 1) reset();
+  $('play').textContent = '⏸ Pause';
+  timer = setInterval(() => { if (i >= steps.length - 1) return stop(); i++; render(); }, 2200);
+};
+document.addEventListener('keydown', e => { if (e.key === 'ArrowRight') $('next').click(); if (e.key === 'ArrowLeft') $('prev').click(); });
+window.addEventListener('resize', () => i >= 0 && drawArrow(steps[i]));
+reset();
+</script>
+</body>
+</html>

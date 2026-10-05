@@ -1,0 +1,17 @@
+[project]
+name = "copilot-sdk-learning-lab"
+version = "0.1.0"
+description = "Progressive hands-on lessons for the GitHub Copilot SDK"
+requires-python = ">=3.11"
+dependencies = [
+  "github-copilot-sdk>=0.1.0",
+  "mcp>=2.3.0",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[dependency-groups]
+dev = [
+    "pillow>=12.3.0",
+]

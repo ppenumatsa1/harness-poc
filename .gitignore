@@ -1,0 +1,42 @@
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+build/
+dist/
+*.egg-info/
+
+# secrets and local settings (commit only *.example files)
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# downloaded packages: fetch them again, never commit them (see lessons/capstone/README.md)
+*.whl
+*.tar.gz
+lessons/capstone/agent/wheels/*
+!lessons/capstone/agent/wheels/.gitkeep
+
+# node / vite
+node_modules/
+*.tsbuildinfo
+.vite/
+lessons/capstone/web/dist/
+
+# logs, editors, OS
+*.log
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+
+# local Foundry / azd state
+.azure/
+.foundry/
