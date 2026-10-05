@@ -7,6 +7,9 @@ Lesson map:
   7  custom tools (tools.py)                  8  custom agents + task delegation
   9  MCP logs server                          10 OpenTelemetry spans
   12 response_schema=Finding                  13 skill, prompt/lifecycle hooks, stop gate, limits, client info
+
+Session lifecycle: a case's SDK session is deleted when its fix is applied or rejected,
+or by the sweeper once it is idle for SESSION_TTL_H hours (cases with no fix).
 """
 
 import asyncio
@@ -15,6 +18,7 @@ import os
 import sys
 import threading
 import time
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import AsyncIterator
 
@@ -66,7 +70,7 @@ MCP_SERVERS = {
         "command": sys.executable,
         "args": ["-m", "app.logs_mcp_server"],
         "working_directory": str(HERE.parent),
-        "env": {k: v for k, v in os.environ.items() if k in ("DB_HOST", "DB_NAME", "APP_RO_PASSWORD", "PATH")},
+        "env": {k: v for k, v in os.environ.items() if k in ("DB_HOST", "DB_NAME", "APP_RO_PASSWORD_FILE", "PATH")},
         "tools": ["*"],
         "timeout": 30_000,
     }
@@ -95,13 +99,17 @@ class Harness:
         self.conversations: dict[str, Conversation] = {}
         self.sessions: dict[str, object] = {}
         self._locks: dict[str, asyncio.Lock] = {}
+        self._sweeper: asyncio.Task | None = None
 
     async def start(self) -> None:
         # use_logged_in_user=False: no GitHub identity. BYOK needs only the Foundry token.
         self.client = CopilotClient(client_info=config.CLIENT_INFO, use_logged_in_user=False)
         await self.client.start()
+        self._sweeper = asyncio.create_task(self._sweep_forever())
 
     async def stop(self) -> None:
+        if self._sweeper:
+            self._sweeper.cancel()
         for s in list(self.sessions.values()):
             try:
                 await s.disconnect()
@@ -140,8 +148,7 @@ class Harness:
         sid = conv.conversation_id
         if sid in self.sessions:
             return self.sessions[sid]
-        known = {s.session_id for s in await self.client.list_sessions()}
-        if sid in known:  # Lesson 2: after an agent restart, resume from disk
+        if await self.client.get_session_metadata(sid):  # Lesson 2: after an agent restart, resume from disk
             session = await self.client.resume_session(sid, **self._session_kwargs(conv))
         else:
             session = await self.client.create_session(
@@ -178,7 +185,7 @@ class Harness:
         async with lock:  # record the decision only when its follow-up turn can run
             status = "approved" if approve else "rejected"
             # An approved-but-not-applied fix may be approved again: retries a failed follow-up turn.
-            row = db.write(
+            row = await db.awrite(
                 "UPDATE fixes SET status = %s, decision_note = %s, decided_at = now() "
                 "WHERE id = %s AND conversation_id = %s "
                 "AND (status = 'pending' OR (status = 'approved' AND %s)) RETURNING id, order_id",
@@ -199,6 +206,46 @@ class Harness:
             yield {"type": "decision", "fix_id": fix_id, "status": status}
             async for event in self._run_turn(conv, prompt, schema=None):
                 yield event
+            fixes = await asyncio.to_thread(fixes_for, conversation_id)
+            if fixes and all(f["status"] in ("applied", "rejected") for f in fixes):
+                await self.close_case(conversation_id, "decided")
+
+    async def close_case(self, conversation_id: str, reason: str) -> None:
+        """Delete the SDK session (history on disk) and drop in-memory state. The fixes table keeps the record."""
+        session = self.sessions.pop(conversation_id, None)
+        self.conversations.pop(conversation_id, None)
+        lock = self._locks.get(conversation_id)
+        if lock is not None and not lock.locked():
+            self._locks.pop(conversation_id, None)
+        try:
+            if session is not None:
+                await session.disconnect()
+            await self.client.delete_session(conversation_id)
+            log.info("closed case %s (%s): session deleted", conversation_id, reason)
+        except Exception:  # noqa: BLE001 - cleanup is best effort
+            log.warning("could not delete session %s", conversation_id, exc_info=True)
+
+    async def sweep(self) -> int:
+        """Close idle cases (for example NO_FAILURE cases that never get a decision)."""
+        now = datetime.now(timezone.utc)
+        closed = 0
+        for meta in await self.client.list_sessions():
+            sid = meta.session_id
+            modified = meta.modified_time if meta.modified_time.tzinfo else meta.modified_time.replace(tzinfo=timezone.utc)
+            idle_h = (now - modified).total_seconds() / 3600
+            lock = self._locks.get(sid)
+            if idle_h >= config.SESSION_TTL_H and not (lock and lock.locked()):
+                await self.close_case(sid, f"idle {idle_h:.1f}h")
+                closed += 1
+        return closed
+
+    async def _sweep_forever(self) -> None:
+        while True:
+            try:
+                await self.sweep()
+            except Exception:  # noqa: BLE001
+                log.warning("session sweep failed", exc_info=True)
+            await asyncio.sleep(config.SWEEP_INTERVAL_S)
 
     def _lock(self, conversation_id: str) -> asyncio.Lock:
         return self._locks.setdefault(conversation_id, asyncio.Lock())
@@ -261,7 +308,7 @@ class Harness:
             if schema is not None:
                 finding = schema.model_validate_json(content)
                 yield {"type": "finding", "finding": finding.model_dump()}
-                problems = self._check_finding(conv, finding)
+                problems = await asyncio.to_thread(self._check_finding, conv, finding)
                 if problems:
                     yield {"type": "error", "message": "finding failed fact checks: " + "; ".join(problems)}
             else:
@@ -297,7 +344,7 @@ class Harness:
             turn_span.end()
         while not queue.empty():
             yield queue.get_nowait()
-        yield {"type": "done", "usage": usage, "fixes": fixes_for(conv.conversation_id)}
+        yield {"type": "done", "usage": usage, "fixes": await asyncio.to_thread(fixes_for, conv.conversation_id)}
 
     @staticmethod
     def _event_mapper(conv: Conversation, usage: dict, tool_spans: dict, turn_ctx):

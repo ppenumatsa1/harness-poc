@@ -73,6 +73,19 @@ Each table row is one issue. Read the "Learning" column first if you are short o
 | Taking screenshots: no browser on the host, npm blocked | Ran `mcr.microsoft.com/playwright:v1.62.1-noble` with `--network host` and installed `playwright-core` from the npm mirror. |
 | Capstone docs missing | Wrote [capstone.md](capstone.md) and the [capstone README](../lessons/capstone/README.md). |
 
+## 2026-10-05 - Review limits fixed
+
+| Issue | Change and learning |
+| --- | --- |
+| Sync `psycopg2` calls blocked the event loop (#9). The SDK calls sync tool handlers directly (`result = fn(...)`), so one slow query froze every case. | `db.aquery/aquery_one/awrite` run the call with `asyncio.to_thread`. Tools, the permission handler, `/health`, `/invoke` and the harness use them. **Learning:** tool and permission handlers may be `async`; the SDK awaits them. |
+| Sessions grew forever (#5), and each resume listed all sessions. | Use `get_session_metadata(sid)` (one lookup). `close_case` disconnects and calls `delete_session` when every fix is applied or rejected; an approved-but-not-applied fix keeps the session for a retry. A sweeper deletes cases idle for `SESSION_TTL_H` (24h). Live: approve → `closed case … session deleted`, folder gone. |
+| Role passwords were set only on first init (#10), and passwords were env vars (visible in `docker inspect`). | `./make_secrets.sh` writes random hex passwords to `secrets/` (git-ignored, folder 700). Compose `secrets:` + `*_FILE` vars. A `db-roles` one-shot runs `ALTER ROLE` on every `up`. Checked: 0 password env vars in `docker inspect`; rotating `app_ro` + `up -d --force-recreate` → health ok. |
+| `db-roles` failed with "connection refused" | The healthcheck `pg_isready` used the socket, which is up during first-start init (TCP is off then). Use `pg_isready -h 127.0.0.1`. |
+| Replaced files did not reach running containers | A file bind mount keeps the old inode. Use `--force-recreate` after rotating. |
+| `get_payment` returned the raw card on purpose (#3) | The tool now returns `'**** ' || right(card_number, 4)`. The demo moved to a realistic leak: a `payment-gw` log line with the full card. The post-tool hook redacts the MCP `logs-get_logs` result. Live: "redacted card number in logs-get_logs result", raw card count in the stream = 0. |
+
+Tests: agent 38 passed (5 new), API 8 passed. Live 1000: `RESERVATION_EXPIRED`, 8 model calls, 25.3K/1.4K tokens, 28.6 s; approve → applied.
+
 ## Lessons 1–13 (earlier sessions)
 
 | Issue | Change and learning |
@@ -95,6 +108,6 @@ Each table row is one issue. Read the "Learning" column first if you are short o
 
 - [x] Raise TPM on the `gpt-5.4-mini` deployment (400K TPM; 0 retries).
 - [x] Write `docs/capstone.md` and `lessons/capstone/README.md`; update the root README and `sdk-concepts.md`.
-- [ ] Accepted review limits (lab only): sessions not trimmed, sync DB calls in async code, role passwords set only at first DB start, raw card read on purpose for the redaction demo. Decide if any must be fixed before the push.
+- [x] Accepted review limits fixed on 2026-10-05 (see the section above). Was: accepted review limits (lab only): sessions not trimmed, sync DB calls in async code, role passwords set only at first DB start, raw card read on purpose for the redaction demo. Decide if any must be fixed before the push.
 - [x] Push to `https://github.com/ppenumatsa1/harness-poc.git` (2026-10-04, commit `e5f6112`).
 - [ ] Later: move the agent to Foundry Hosted Agents; revisit the 5 background SDK features and the 1.0.17 upgrade.

@@ -1,4 +1,7 @@
-"""Settings from environment variables (docker-compose passes them from .env)."""
+"""Settings from environment variables (docker-compose passes them from .env).
+
+Passwords come from Compose secret files (/run/secrets/*), never from plain env vars.
+"""
 
 import os
 
@@ -6,13 +9,24 @@ FOUNDRY_BASE_URL = os.environ.get("FOUNDRY_BASE_URL", "")  # https://<resource>.
 FOUNDRY_MODEL = os.environ.get("FOUNDRY_MODEL", "gpt-5.4-mini")  # a reasoning model (BYOK always sends effort)
 FOUNDRY_SCOPE = "https://cognitiveservices.azure.com/.default"
 
+def secret(name: str) -> str:
+    """Read a password from the file in NAME_FILE (Compose secret); fall back to the NAME env var."""
+    path = os.environ.get(f"{name}_FILE")
+    if path:
+        with open(path) as f:
+            return f.read().strip()
+    return os.environ.get(name, "")
+
+
 DB_HOST = os.environ.get("DB_HOST", "db")
 DB_NAME = os.environ.get("DB_NAME", "checkout")
-DB_RO_DSN = f"host={DB_HOST} dbname={DB_NAME} user=app_ro password={os.environ.get('APP_RO_PASSWORD', '')}"
-DB_RW_DSN = f"host={DB_HOST} dbname={DB_NAME} user=app_rw password={os.environ.get('APP_RW_PASSWORD', '')}"
+DB_RO_DSN = f"host={DB_HOST} dbname={DB_NAME} user=app_ro password={secret('APP_RO_PASSWORD')}"
+DB_RW_DSN = f"host={DB_HOST} dbname={DB_NAME} user=app_rw password={secret('APP_RW_PASSWORD')}"
 
 APPINSIGHTS = os.environ.get("APPLICATIONINSIGHTS_CONNECTION_STRING", "")
 TURN_TIMEOUT_S = float(os.environ.get("TURN_TIMEOUT_S", "300"))
+SESSION_TTL_H = float(os.environ.get("SESSION_TTL_H", "24"))  # idle cases are deleted after this
+SWEEP_INTERVAL_S = float(os.environ.get("SWEEP_INTERVAL_S", "600"))
 MAX_AI_CREDITS = float(os.environ.get("MAX_AI_CREDITS", "100"))  # Lesson 13 (minimum is 30)
 
 CLIENT_INFO = {"application_name": "checkout-investigator", "application_version": "1.0.0"}

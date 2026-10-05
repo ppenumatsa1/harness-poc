@@ -68,7 +68,7 @@ sequenceDiagram
     and
         R->>D: inventory-analyst: get_inventory, logs-get_logs (MCP)
     end
-    Note over H: post-tool hook redacts the card number
+    Note over H: post-tool hook redacts the card number leaked in a log line
     R->>D: propose_fix → fixes row (pending)
     R-->>H: Finding (JSON)
     H->>D: fact check (order id, fix id)
@@ -86,7 +86,7 @@ sequenceDiagram
 | Lesson | Where it is used | File |
 |---|---|---|
 | 1 Getting started | One `CopilotClient` for the whole service; `ping` in `/health` | [harness.py](../lessons/capstone/agent/app/harness.py), [main.py](../lessons/capstone/agent/app/main.py) |
-| 2 Session persistence | Session id = case id; `resume_session` for the decision turn; sessions stored in a Docker volume | [harness.py](../lessons/capstone/agent/app/harness.py) |
+| 2 Session persistence | Session id = case id; `get_session_metadata` + `resume_session` for the decision turn; `delete_session` when the case closes | [harness.py](../lessons/capstone/agent/app/harness.py) |
 | 3 Streaming events | `session.on` → small JSON events → SSE (agent → api → web) | [harness.py](../lessons/capstone/agent/app/harness.py), [sse.ts](../lessons/capstone/web/src/sse.ts) |
 | 4 Context management | System message (append mode); infinite sessions with background compaction at 80% | [harness.py](../lessons/capstone/agent/app/harness.py) |
 | 5 Auth + BYOK | `provider` type `openai` with a bearer token from `AzureCliCredential`; no GitHub login | [harness.py](../lessons/capstone/agent/app/harness.py) |
@@ -107,12 +107,15 @@ Each guardrail is enforced in code. The model does not have to cooperate.
 |---|---|---|
 | Tool allow-list | `available_tools` | The model sees only `task`, `skill`, the 5 custom tools and `logs-get_logs`. It has no shell and no file tools. |
 | Read-only data | DB roles | Read tools connect as `app_ro`. Only the fix tools use `app_rw`, and that role can only write `fixes`. |
+| Safe tool output | tool code | `get_payment` returns only `**** 1111`. The full card never leaves the database through a tool. |
 | Scope guard | `on_pre_tool_use` | Denies a tool call for any order other than the case's order. |
-| Redaction | `on_post_tool_use` | Changes `4111 1111 1111 1111` to `**** 1111` before the model sees it. |
+| Redaction | `on_post_tool_use` | Defense in depth: a payment-gateway **log line** leaks the full card. The hook changes it to `**** 1111` before the model sees it. |
 | Propose, never apply | permission handler | `propose_fix` is approved. `apply_fix` is approved only if the DB row is `approved` for this case. |
 | Stop gate | `on_agent_stop` | Blocks the main agent once if it tries to stop without `propose_fix`. Skipped while sub-agents run. |
 | Fact check | harness code | The finding's order id must match the case, and its fix id must belong to the case. |
 | One turn per case | `asyncio.Lock` per case | A second request on a busy case gets an error. Nothing is reset or written. |
+| Case cleanup | `delete_session` | When every fix of a case is applied or rejected, the session is deleted. A sweeper deletes cases idle for 24h (`SESSION_TTL_H`). The `fixes` table keeps the record. |
+| Secrets | Compose secrets | DB passwords are random files in `secrets/` (git-ignored), mounted at `/run/secrets`. They do not show in `docker inspect`. |
 | Abort on disconnect | `session.abort()` | If the browser goes away, the runtime stops the turn and stops spending tokens. |
 
 ## 7. API map
@@ -163,9 +166,12 @@ App Insights: one `operation_Id` holds both `checkout-api` and `checkout-agent` 
 7. **Named volumes take the image directory's owner.** Create `/home/app/.copilot` as the app user in the Dockerfile.
 8. **BYOK needs a reasoning model.** The runtime always sends a reasoning effort.
 9. **Token rate.** One investigation uses about 25K input tokens. Plan TPM for your number of parallel cases.
+10. **Sync tool handlers block the event loop.** The SDK calls a sync handler directly. Make tools `async` and run blocking DB calls with `asyncio.to_thread`.
+11. **Postgres init scripts run once.** A `db-roles` step syncs app passwords on every `up`. Its healthcheck must use TCP: during first-start init, Postgres listens on the socket only.
 
 ## 10. Accepted limits and what comes next
 
-- Local lab only. Sessions and caches are not trimmed. DB calls are sync inside async code. Role passwords are set once.
-- The raw card number is read on purpose to show redaction. The data is fake.
+- Local lab only. One agent process; in-memory locks.
+- The superuser password is set once. Changing it needs `docker compose down -v`.
+- The card data is fake seed data.
 - **Next:** move `agent` to a Foundry Hosted Agent. Try the [background features](sdk-concepts.md#5-revisit-before-the-capstone) and the SDK 1.0.17 upgrade (sub-agent hooks would replace the stop-gate workaround).

@@ -20,6 +20,7 @@ dist/
 # downloaded packages: fetch them again, never commit them (see lessons/capstone/README.md)
 *.whl
 *.tar.gz
+lessons/capstone/secrets/
 lessons/capstone/agent/wheels/*
 !lessons/capstone/agent/wheels/.gitkeep
 

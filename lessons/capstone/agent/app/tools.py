@@ -1,6 +1,6 @@
 """Lesson 7: custom tools over Postgres. Lesson 12: the Finding schema.
 
-Read tools skip permission (read-only role). propose_fix / apply_fix go through the
+Tools are async: DB calls run in a worker thread (db.a*). Read tools skip permission (read-only role). propose_fix / apply_fix go through the
 permission handler (Lesson 6): propose writes a 'pending' row; apply needs a human 'approved' row.
 """
 
@@ -41,8 +41,8 @@ class Finding(BaseModel):
 
 
 @define_tool(description="Get an order: status, total, items, reservation id.", skip_permission=True)
-def get_order(params: OrderId) -> dict:
-    row = db.query_one(
+async def get_order(params: OrderId) -> dict:
+    row = await db.aquery_one(
         "SELECT order_id, status, total_cents, currency, items, reservation_id, created_at "
         "FROM orders WHERE order_id = %s",
         (params.order_id,),
@@ -51,10 +51,10 @@ def get_order(params: OrderId) -> dict:
 
 
 @define_tool(description="Get the payment record for an order (status, amount, decline code).", skip_permission=True)
-def get_payment(params: OrderId) -> dict:
-    # Returns the raw card number on purpose: the post-tool hook (hooks.py) redacts it.
-    row = db.query_one(
-        "SELECT payment_id, order_id, status, card_number, amount_cents, decline_code "
+async def get_payment(params: OrderId) -> dict:
+    # Safe by design: the tool never returns the full card number, only the last 4 digits.
+    row = await db.aquery_one(
+        "SELECT payment_id, order_id, status, '**** ' || right(card_number, 4) AS card, amount_cents, decline_code "
         "FROM payments WHERE order_id = %s",
         (params.order_id,),
     )
@@ -62,8 +62,8 @@ def get_payment(params: OrderId) -> dict:
 
 
 @define_tool(description="Get the inventory reservation for an order (ttl, status).", skip_permission=True)
-def get_inventory(params: OrderId) -> dict:
-    row = db.query_one(
+async def get_inventory(params: OrderId) -> dict:
+    row = await db.aquery_one(
         "SELECT reservation_id, order_id, sku, qty, ttl_seconds, status, created_at "
         "FROM inventory_reservations WHERE order_id = %s",
         (params.order_id,),
@@ -72,8 +72,8 @@ def get_inventory(params: OrderId) -> dict:
 
 
 @define_tool(description="Submit ONE corrective action for human approval. Returns a fix_id. Never applies it.")
-def propose_fix(params: Fix, invocation: ToolInvocation) -> dict:
-    row = db.write(
+async def propose_fix(params: Fix, invocation: ToolInvocation) -> dict:
+    row = await db.awrite(
         "INSERT INTO fixes (order_id, conversation_id, action) VALUES (%s, %s, %s) RETURNING id, status",
         (params.order_id, invocation.session_id, params.action),
     )
@@ -81,8 +81,8 @@ def propose_fix(params: Fix, invocation: ToolInvocation) -> dict:
 
 
 @define_tool(description="Apply a fix that a human has APPROVED. Fails for pending or rejected fixes.")
-def apply_fix(params: FixId, invocation: ToolInvocation) -> dict:
-    row = db.write(
+async def apply_fix(params: FixId, invocation: ToolInvocation) -> dict:
+    row = await db.awrite(
         "UPDATE fixes SET status = 'applied' WHERE id = %s AND conversation_id = %s AND status = 'approved' "
         "RETURNING id, order_id, action, status",
         (params.fix_id, invocation.session_id),

@@ -14,7 +14,7 @@ CREATE TABLE payments (
     payment_id    TEXT PRIMARY KEY,
     order_id      TEXT NOT NULL REFERENCES orders(order_id),
     status        TEXT NOT NULL,
-    card_number   TEXT NOT NULL,          -- sensitive: the agent's post-tool hook redacts it
+    card_number   TEXT NOT NULL,          -- sensitive: get_payment returns only the last 4 digits
     amount_cents  INTEGER NOT NULL,
     decline_code  TEXT
 );

@@ -1,5 +1,7 @@
 """Offline tests: hooks (Lessons 6 + 13), permission routing, Finding schema (Lesson 12)."""
 
+import asyncio
+
 import pytest
 from pydantic import ValidationError
 
@@ -35,6 +37,15 @@ def test_post_tool_hook_returns_modified_result():
     out = post({"toolName": "get_payment", "toolResult": {"card_number": "4111111111111111"}}, None)
     assert out == {"modifiedResult": {"card_number": "**** 1111"}}
     assert events[-1]["hook"] == "post_tool"
+
+
+def test_post_tool_redacts_card_leaked_in_logs():
+    conv, events = make_conv()
+    post = build_hooks(conv)["on_post_tool_use"]
+    logs = "10:00:03 payment-gw   auth request card=4111 1111 1111 1111 amount=84.20\n10:02:01 inventory    RES-77 EXPIRED"
+    out = post({"toolName": "logs-get_logs", "toolResult": logs}, None)
+    assert out["modifiedResult"] == logs.replace("4111 1111 1111 1111", "**** 1111")
+    assert "logs-get_logs" in events[-1]["text"]
 
 
 # --- pre-tool: scope guard ------------------------------------------------------
@@ -81,11 +92,16 @@ def test_stop_gate_ignores_subagent_stops_and_keeps_its_block():
 
 # --- permission handler ---------------------------------------------------------
 
+def decide(handler, request):
+    # The handler is async: its DB lookup runs in a worker thread (db.aquery_one).
+    return asyncio.run(handler(request, None))
+
+
 def test_permission_approves_propose_fix():
     conv, _ = make_conv()
     handler = build_permission_handler(conv)
     req = PermissionRequestCustomTool(tool_call_id="t1", tool_name="propose_fix", tool_description="", args={})
-    assert isinstance(handler(req, None), PermissionDecisionApproveOnce)
+    assert isinstance(decide(handler, req), PermissionDecisionApproveOnce)
     assert conv.proposed_fix is False  # only a successful result (post-tool hook) counts
 
 
@@ -105,7 +121,7 @@ def test_permission_apply_fix_needs_human_approval(monkeypatch, status, expected
     monkeypatch.setattr(hooks.db, "query_one", lambda *a, **k: {"status": status} if status else None)
     conv, _ = make_conv()
     req = PermissionRequestCustomTool(tool_call_id="t1", tool_name="apply_fix", tool_description="", args={"fix_id": 7})
-    assert isinstance(build_permission_handler(conv)(req, None), expected)
+    assert isinstance(decide(build_permission_handler(conv), req), expected)
 
 
 def test_permission_mcp_logs_read_only_only():
@@ -114,9 +130,9 @@ def test_permission_mcp_logs_read_only_only():
     ok = PermissionRequestMcp(server_name="logs", tool_name="get_logs", tool_title="", read_only=True, args={})
     write = PermissionRequestMcp(server_name="logs", tool_name="get_logs", tool_title="", read_only=False, args={})
     other = PermissionRequestMcp(server_name="github", tool_name="x", tool_title="", read_only=True, args={})
-    assert isinstance(handler(ok, None), PermissionDecisionApproveOnce)
-    assert isinstance(handler(write, None), PermissionDecisionReject)
-    assert isinstance(handler(other, None), PermissionDecisionReject)
+    assert isinstance(decide(handler, ok), PermissionDecisionApproveOnce)
+    assert isinstance(decide(handler, write), PermissionDecisionReject)
+    assert isinstance(decide(handler, other), PermissionDecisionReject)
 
 
 # --- Finding schema -------------------------------------------------------------

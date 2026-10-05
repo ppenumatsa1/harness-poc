@@ -23,6 +23,7 @@ INSERT INTO inventory_reservations VALUES
 
 INSERT INTO logs (order_id, ts, service, message) VALUES
  ('1000', '2026-10-01 10:00:01+00', 'checkout-api', 'order 1000 created, reservation RES-77 ttl=120s'),
+ ('1000', '2026-10-01 10:00:03+00', 'payment-gw',   'auth request card=4111 1111 1111 1111 amount=84.20'),
  ('1000', '2026-10-01 10:00:04+00', 'payment-api',  'PAY-501 authorized 84.20 USD'),
  ('1000', '2026-10-01 10:01:30+00', 'payment-api',  'capture queue lag 95s (normal < 5s)'),
  ('1000', '2026-10-01 10:02:01+00', 'inventory',    'reservation RES-77 EXPIRED'),

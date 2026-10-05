@@ -5,6 +5,7 @@ Order of checks for every tool call:
   2. permission     : read tools skip it; propose_fix allowed; apply_fix only if a human approved
   3. tool runs
   4. post-tool hook : redact card numbers before the model sees the result
+                      (defense in depth: get_payment is already masked; raw cards leak via logs)
 """
 
 import json
@@ -111,13 +112,13 @@ def build_hooks(conv: Conversation) -> dict:
 
 
 def build_permission_handler(conv: Conversation):
-    def on_permission(request, _invocation):
+    async def on_permission(request, _invocation):
         match request:
             case PermissionRequestCustomTool(tool_name="propose_fix"):
                 return PermissionDecisionApproveOnce()
             case PermissionRequestCustomTool(tool_name="apply_fix"):
                 fix_id = (request.args or {}).get("fix_id")
-                row = db.query_one(
+                row = await db.aquery_one(
                     "SELECT status FROM fixes WHERE id = %s AND conversation_id = %s",
                     (fix_id, conv.conversation_id),
                 )

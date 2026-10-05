@@ -54,7 +54,7 @@ def sse(events) -> StreamingResponse:
 @app.get("/health")
 async def health():
     try:
-        db.query_one("SELECT 1 AS ok")
+        await db.aquery_one("SELECT 1 AS ok")
         db_ok = True
     except Exception:  # noqa: BLE001
         db_ok = False
@@ -67,7 +67,7 @@ async def health():
 
 @app.post("/invoke")
 async def invoke(req: InvokeRequest):
-    if db.query_one("SELECT 1 AS ok FROM orders WHERE order_id = %s", (req.order_id,)) is None:
+    if await db.aquery_one("SELECT 1 AS ok FROM orders WHERE order_id = %s", (req.order_id,)) is None:
         raise HTTPException(404, f"order {req.order_id} not found")
     return sse(harness.investigate(req.conversation_id, req.order_id))
 

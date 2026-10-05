@@ -1,5 +1,10 @@
-"""Postgres access. Two roles: app_ro (reads) and app_rw (fixes table only)."""
+"""Postgres access. Two roles: app_ro (reads) and app_rw (fixes table only).
 
+psycopg2 blocks. Async code (tools, permission handler, harness) must use the a* helpers,
+which run the call in a worker thread so one slow query does not freeze every case.
+"""
+
+import asyncio
 from contextlib import contextmanager
 from decimal import Decimal
 
@@ -44,3 +49,15 @@ def query_one(sql: str, params: tuple = (), *, dsn: str | None = None) -> dict |
 
 def write(sql: str, params: tuple = ()) -> dict | None:
     return query_one(sql, params, dsn=config.DB_RW_DSN)
+
+
+async def aquery(sql: str, params: tuple = (), *, dsn: str | None = None) -> list[dict]:
+    return await asyncio.to_thread(query, sql, params, dsn=dsn)
+
+
+async def aquery_one(sql: str, params: tuple = (), *, dsn: str | None = None) -> dict | None:
+    return await asyncio.to_thread(query_one, sql, params, dsn=dsn)
+
+
+async def awrite(sql: str, params: tuple = ()) -> dict | None:
+    return await asyncio.to_thread(write, sql, params)

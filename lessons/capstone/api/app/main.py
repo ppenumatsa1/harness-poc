@@ -22,10 +22,19 @@ from fastapi import FastAPI, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
+def _secret(name: str) -> str:
+    """Password from the Compose secret file in NAME_FILE; env var NAME as a fallback."""
+    path = os.environ.get(f"{name}_FILE")
+    if path:
+        with open(path) as f:
+            return f.read().strip()
+    return os.environ.get(name, "")
+
+
 AGENT_URL = os.environ.get("AGENT_URL", "http://agent:8001")
 DB_DSN = (
     f"host={os.environ.get('DB_HOST', 'db')} dbname={os.environ.get('DB_NAME', 'checkout')} "
-    f"user=app_ro password={os.environ.get('APP_RO_PASSWORD', '')}"
+    f"user=app_ro password={_secret('APP_RO_PASSWORD')}"
 )
 CONVERSATION_ID = r"^[a-zA-Z0-9_-]{6,64}$"
 

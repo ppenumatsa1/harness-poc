@@ -3,17 +3,14 @@
 Tool name seen by the agent: "logs-get_logs" (<server>-<tool>).
 """
 
-import os
-
 import psycopg2
 from mcp.server.mcpserver import MCPServer
 from mcp.types import ToolAnnotations
 
+from app import config
+
 server = MCPServer("logs")
-DSN = (
-    f"host={os.environ.get('DB_HOST', 'db')} dbname={os.environ.get('DB_NAME', 'checkout')} "
-    f"user=app_ro password={os.environ.get('APP_RO_PASSWORD', '')}"
-)
+DSN = config.DB_RO_DSN  # password from the secret file
 
 
 @server.tool(

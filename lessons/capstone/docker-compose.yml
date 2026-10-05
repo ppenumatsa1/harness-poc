@@ -6,17 +6,30 @@ services:
     environment:
       POSTGRES_DB: checkout
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      APP_RO_PASSWORD: ${APP_RO_PASSWORD}
-      APP_RW_PASSWORD: ${APP_RW_PASSWORD}
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
+      APP_RO_PASSWORD_FILE: /run/secrets/app_ro_password
+      APP_RW_PASSWORD_FILE: /run/secrets/app_rw_password
+    secrets: [postgres_password, app_ro_password, app_rw_password]
     volumes:
       - ./db/init:/docker-entrypoint-initdb.d:ro
       - db-data:/var/lib/postgresql/data
     ports: ["127.0.0.1:${DB_HOST_PORT:-5432}:5432"]
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d checkout"]
+      # TCP, not the socket: during first-start init Postgres listens on the socket only.
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U postgres -d checkout"]
       interval: 3s
       retries: 20
+
+  # Runs on every `up`: applies the app role passwords from the secret files (init scripts run only once).
+  db-roles:
+    image: postgres:16-alpine
+    command: ["sh", "/sync_roles.sh"]
+    volumes:
+      - ./db/sync_roles.sh:/sync_roles.sh:ro
+    secrets: [postgres_password, app_ro_password, app_rw_password]
+    depends_on:
+      db: {condition: service_healthy}
+    restart: "no"
 
   agent:
     build: ./agent
@@ -24,16 +37,17 @@ services:
       FOUNDRY_BASE_URL: ${FOUNDRY_BASE_URL}
       FOUNDRY_MODEL: ${FOUNDRY_MODEL:-gpt-5.4-mini}
       DB_HOST: db
-      APP_RO_PASSWORD: ${APP_RO_PASSWORD}
-      APP_RW_PASSWORD: ${APP_RW_PASSWORD}
+      APP_RO_PASSWORD_FILE: /run/secrets/app_ro_password
+      APP_RW_PASSWORD_FILE: /run/secrets/app_rw_password
       APPLICATIONINSIGHTS_CONNECTION_STRING: ${APPLICATIONINSIGHTS_CONNECTION_STRING:-}
       OTEL_SERVICE_NAME: checkout-agent
       MAX_AI_CREDITS: ${MAX_AI_CREDITS:-0}
     volumes:
       - ${HOME}/.azure:/azure-host:ro          # your `az login` (copied to a writable dir at start)
       - agent-state:/home/app/.copilot         # Lesson 2: SDK sessions survive restarts
+    secrets: [app_ro_password, app_rw_password]
     depends_on:
-      db: {condition: service_healthy}
+      db-roles: {condition: service_completed_successfully}
     healthcheck:
       test: ["CMD", "python", "-c", "import json, urllib.request; assert json.load(urllib.request.urlopen('http://localhost:8001/health'))['status'] == 'ok'"]
       interval: 5s
@@ -44,10 +58,11 @@ services:
     environment:
       AGENT_URL: http://agent:8001
       DB_HOST: db
-      APP_RO_PASSWORD: ${APP_RO_PASSWORD}
+      APP_RO_PASSWORD_FILE: /run/secrets/app_ro_password
       APPLICATIONINSIGHTS_CONNECTION_STRING: ${APPLICATIONINSIGHTS_CONNECTION_STRING:-}
       OTEL_SERVICE_NAME: checkout-api
     ports: ["127.0.0.1:8000:8000"]
+    secrets: [app_ro_password]
     depends_on:
       agent: {condition: service_healthy}
 
@@ -57,6 +72,13 @@ services:
       API_URL: http://api:8000
     ports: ["127.0.0.1:5173:5173"]
     depends_on: [api]
+
+# Local passwords as files (./make_secrets.sh). Mounted at /run/secrets/<name>;
+# unlike env vars they do not show in `docker inspect`.
+secrets:
+  postgres_password: {file: ./secrets/postgres_password}
+  app_ro_password: {file: ./secrets/app_ro_password}
+  app_rw_password: {file: ./secrets/app_rw_password}
 
 volumes:
   db-data:

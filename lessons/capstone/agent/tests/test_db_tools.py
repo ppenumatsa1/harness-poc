@@ -31,6 +31,11 @@ def test_read_tools_return_order_1000_facts():
     assert '"status": "EXPIRED"' in call(get_inventory, {"order_id": "1000"})
 
 
+def test_get_payment_never_returns_full_card():
+    out = call(get_payment, {"order_id": "1000"})
+    assert '"card": "**** 1111"' in out and "4111 1111" not in out
+
+
 def test_missing_order_is_a_soft_error():
     assert "not found" in call(get_order, {"order_id": "9999"})
 
@@ -62,4 +67,5 @@ def test_mcp_logs_tool_reads_first_failure():
 
     lines = get_logs("1000")
     assert "RES-77 EXPIRED" in lines
+    assert "4111 1111 1111 1111" in lines  # the raw card leaks in logs: the post-tool hook must redact it
     assert get_logs("9999") == "no logs for order 9999"

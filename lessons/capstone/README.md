@@ -19,7 +19,8 @@ web (React, :5173) → api (FastAPI, :8000) → agent (Copilot SDK, :8001) → F
 
 ```bash
 cd lessons/capstone
-cp .env.example .env                 # fill in FOUNDRY_BASE_URL and passwords (never commit .env)
+cp .env.example .env                 # fill in FOUNDRY_BASE_URL (never commit .env)
+./make_secrets.sh                    # once: random DB passwords in ./secrets (git-ignored)
 ./agent/fetch_wheels.sh              # once: downloads the SDK wheel (not on the package mirror; git-ignored)
 docker compose up -d --build
 docker compose ps                    # agent shows (healthy)
@@ -59,6 +60,12 @@ api/     FastAPI: health, orders, fixes, SSE relay for investigate and decision
 web/     React + Vite + TypeScript UI
 db/init/ schema, seed data, read-only and read-write roles
 ```
+
+## Passwords
+
+- DB passwords are files in `secrets/`, made by `./make_secrets.sh`. Compose mounts them at `/run/secrets/` (not env vars, so they do not show in `docker inspect`).
+- Rotate an app password: `rm secrets/app_ro_password && ./make_secrets.sh && docker compose up -d --force-recreate`. The `db-roles` step runs `ALTER ROLE` on every start.
+- The superuser password (`postgres_password`) is set only when the volume is new. Changing it needs a reset.
 
 ## Reset
 
