@@ -174,4 +174,4 @@ App Insights: one `operation_Id` holds both `checkout-api` and `checkout-agent` 
 - Local lab only. One agent process; in-memory locks.
 - The superuser password is set once. Changing it needs `docker compose down -v`.
 - The card data is fake seed data.
-- **Next:** move `agent` to a Foundry Hosted Agent. Try the [background features](sdk-concepts.md#5-revisit-before-the-capstone) and the SDK 1.0.17 upgrade (sub-agent hooks would replace the stop-gate workaround).
+- **Later:** the [background features](sdk-concepts.md#5-deferred-until-sdk-ga) and the SDK 1.0.17 upgrade wait until the SDK is GA (sub-agent hooks could replace the stop-gate workaround). Moving `agent` to a Foundry Hosted Agent is on the back burner.

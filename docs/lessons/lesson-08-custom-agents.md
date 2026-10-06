@@ -114,7 +114,7 @@ Add a third agent, `fix-planner`, with only `propose_fix` from Lesson 7. Add `pr
 
 ## Later: background features
 
-> Not run yet. Revisit before the capstone ([list](../sdk-concepts.md#5-revisit-before-the-capstone)). Verified to exist in SDK 1.0.16.
+> Not run yet. Deferred until SDK GA ([list](../sdk-concepts.md#5-deferred-until-sdk-ga)). Verified to exist in SDK 1.0.16.
 
 | Feature | Try it |
 |---|---|

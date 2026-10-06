@@ -110,4 +110,5 @@ Tests: agent 38 passed (5 new), API 8 passed. Live 1000: `RESERVATION_EXPIRED`, 
 - [x] Write `docs/capstone.md` and `lessons/capstone/README.md`; update the root README and `sdk-concepts.md`.
 - [x] Accepted review limits fixed on 2026-10-05 (see the section above). Was: accepted review limits (lab only): sessions not trimmed, sync DB calls in async code, role passwords set only at first DB start, raw card read on purpose for the redaction demo. Decide if any must be fixed before the push.
 - [x] Push to `https://github.com/ppenumatsa1/harness-poc.git` (2026-10-04, commit `e5f6112`).
-- [ ] Later: move the agent to Foundry Hosted Agents; revisit the 5 background SDK features and the 1.0.17 upgrade.
+- [ ] **Deferred until SDK GA** (decided 2026-10-05): the 5 background SDK features and the 1.0.17 upgrade. The SDK is in preview; see [sdk-concepts.md section 5](sdk-concepts.md#5-deferred-until-sdk-ga).
+- [ ] **Back burner** (decided 2026-10-05): move the agent to Foundry Hosted Agents.

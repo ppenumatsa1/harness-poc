@@ -67,15 +67,17 @@ Rule: no tools, agents, or UI until lifecycle and events are clear.
 - [x] 11. Steering + queueing ([lesson](lessons/lesson-11-steering-and-queueing.md))
 - [x] 12. User input + structured output ([lesson](lessons/lesson-12-user-input-and-structured-output.md))
 - [x] 13. Skills + lifecycle hooks ([lesson](lessons/lesson-13-skills-and-lifecycle-hooks.md))
-- [ ] Revisit the background features below
+- [ ] Background features + 1.0.17 upgrade: **deferred until the SDK is GA** (see section 5)
 - [x] Capstone: build the Order 1000 investigation app with all concepts (local Docker Compose; see [capstone.md](capstone.md))
-- [ ] Capstone later: move the agent to Foundry Hosted Agents
+- [ ] Capstone later: move the agent to Foundry Hosted Agents (**back burner**, decided 2026-10-05)
 
 Coverage against the official docs: [sdk-coverage.md](sdk-coverage.md)
 
-## 5. Revisit before the capstone
+## 5. Deferred until SDK GA
 
-> **Note:** These features exist in our installed SDK (1.0.16) but no lesson runs them yet. Each lesson below has them as background "Try it later" notes. Revisit them and decide which ones the capstone uses. Also run the `sdk-upgrade-check` skill: 1.0.17 (preview) adds sub-agent hooks and `session.set_tools`.
+> **Decision (2026-10-05):** the SDK is in public preview, so we do not upgrade or add preview features now. When the SDK reaches GA: run the `sdk-upgrade-check` skill, upgrade (1.0.17 adds sub-agent hooks and `session.set_tools`; sub-agent hooks could replace the capstone's stop-gate workaround), then add the features below as "Try it" steps and decide which ones the capstone uses.
+>
+> These features exist in our installed SDK (1.0.16) but no lesson runs them yet. Each lesson has them as background "Try it later" notes.
 
 | Feature | What it does | Lesson note |
 |---|---|---|

@@ -114,7 +114,7 @@ Add `disabled_skills=["checkout-runbook"]` to Part A and compare the reply forma
 
 ## Later: background features
 
-> Not run yet. Revisit before the capstone ([list](../sdk-concepts.md#5-revisit-before-the-capstone)).
+> Not run yet. Deferred until SDK GA ([list](../sdk-concepts.md#5-deferred-until-sdk-ga)).
 
 | Feature | Try it |
 |---|---|

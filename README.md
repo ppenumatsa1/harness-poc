@@ -4,6 +4,23 @@ Hands-on lessons for the [GitHub Copilot SDK](https://github.com/github/copilot-
 
 Method: clear writing → diagram → runnable code → observed output → interactive simulation (for the hard parts).
 
+## Capstone: Checkout Investigator
+
+A local app that uses all 13 lessons together. The agent finds why a checkout failed and proposes one fix. A human approves or rejects it.
+
+![Checkout Investigator UI: a finding for order 1000 waiting for a human decision](docs/images/capstone-ui.png)
+
+1. **web** (React) → **api** (FastAPI) → **agent** (Copilot SDK harness, BYOK to Foundry `gpt-5.4-mini`) → **db** (Postgres), all in Docker Compose.
+2. Two sub-agents collect facts in parallel. Hooks keep tools on this order and redact card numbers.
+3. The agent returns a structured finding and a `pending` fix. The fix is applied only after a human approves it.
+
+| Read | Link |
+|---|---|
+| How it works (story, diagrams, lesson map, guardrails) | [docs/capstone.md](docs/capstone.md) |
+| Run it locally | [lessons/capstone/README.md](lessons/capstone/README.md) |
+| Code | [lessons/capstone/](lessons/capstone/) |
+| Issues, changes and fixes | [docs/issues-changes-fixes.md](docs/issues-changes-fixes.md) |
+
 ## Quick start
 
 ```bash
@@ -44,7 +61,7 @@ Lesson 5 Part D (BYOK) also needs `az login` plus `FOUNDRY_BASE_URL` and `FOUNDR
 | 11 | Steering and queueing | [lesson_11_steering_and_queueing.py](lessons/lesson_11_steering_and_queueing.py) | [lesson-11-steering-and-queueing.md](docs/lessons/lesson-11-steering-and-queueing.md) |
 | 12 | User input (ask_user, images) + structured output | [lesson_12_user_input_and_structured_output.py](lessons/lesson_12_user_input_and_structured_output.py) | [lesson-12-user-input-and-structured-output.md](docs/lessons/lesson-12-user-input-and-structured-output.md) |
 | 13 | Skills + lifecycle hooks (prompt, session, error, stop), limits, client info | [lesson_13_skills_and_lifecycle_hooks.py](lessons/lesson_13_skills_and_lifecycle_hooks.py), [SKILL.md](lessons/skills/checkout-runbook/SKILL.md) | [lesson-13-skills-and-lifecycle-hooks.md](docs/lessons/lesson-13-skills-and-lifecycle-hooks.md) |
-| — | Capstone: Order 1000 investigation app using all concepts | [lessons/capstone/](lessons/capstone/) | [capstone.md](docs/capstone.md) (local; Hosted Agents and [background features](docs/sdk-concepts.md#5-revisit-before-the-capstone) later) |
+| — | Capstone: Order 1000 investigation app using all concepts | [lessons/capstone/](lessons/capstone/) | [capstone.md](docs/capstone.md) (local; [background features](docs/sdk-concepts.md#5-deferred-until-sdk-ga) wait for SDK GA; Hosted Agents on the back burner) |
 
 Shared fake data: [checkout_fakes.py](lessons/checkout_fakes.py). Lessons 8–13 reuse the Lesson 7 tools.
 
@@ -52,7 +69,9 @@ Shared fake data: [checkout_fakes.py](lessons/checkout_fakes.py). Lessons 8–13
 
 ```text
 lessons/           runnable code (one file per lesson) + skills/
-docs/              big-picture docs, scenario, simulation, coverage
+lessons/capstone/  Checkout Investigator app: web, api, agent, db (Docker Compose)
+docs/              big-picture docs, scenario, simulation, coverage, capstone, issues log
+docs/images/       screenshots
 docs/lessons/      one doc per lesson: story, diagram, API map, observed output, try it
 ```
 
